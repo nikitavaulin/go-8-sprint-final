@@ -26,12 +26,12 @@ func (s ParcelStore) Add(p Parcel) (int, error) {
 		sql.Named("address", p.Address),
 		sql.Named("date", p.CreatedAt))
 	if err != nil {
-		return 0, fmt.Errorf("add new parcel error: %v", err)
+		return 0, fmt.Errorf("add new parcel error: %w", err)
 	}
 
 	parcelId, err := result.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("get inserted parcel id error: %v", err)
+		return 0, fmt.Errorf("get inserted parcel id error: %w", err)
 	}
 
 	p.Number = int(parcelId)
@@ -45,9 +45,9 @@ func (s ParcelStore) Get(number int) (Parcel, error) {
 	err := row.Scan(&p.Client, &p.Status, &p.Address, &p.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return p, ErrorParcelNotFound
+			return Parcel{}, ErrorParcelNotFound
 		}
-		return p, fmt.Errorf("get parcel by number error: %v", err)
+		return p, fmt.Errorf("get parcel by number error: %w", err)
 	}
 
 	p.Number = number
@@ -58,10 +58,7 @@ func (s ParcelStore) Get(number int) (Parcel, error) {
 func (s ParcelStore) GetByClient(client int) ([]Parcel, error) {
 	rows, err := s.db.Query("SELECT number, status, address, created_at FROM parcel WHERE client = :id", sql.Named("id", client))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrorParcelNotFound
-		}
-		return nil, fmt.Errorf("get parcels by client error: %v", err)
+		return nil, fmt.Errorf("get parcels by client error: %w", err)
 	}
 	defer rows.Close()
 
@@ -70,11 +67,15 @@ func (s ParcelStore) GetByClient(client int) ([]Parcel, error) {
 		var p = Parcel{}
 		err = rows.Scan(&p.Number, &p.Status, &p.Address, &p.CreatedAt)
 		if err != nil {
-			return nil, fmt.Errorf("scan row attributes error: %v", err)
+			return nil, fmt.Errorf("scan row attributes error: %w", err)
 		}
 		p.Client = client
 
 		parcels = append(parcels, p)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("iter rows error: %w", rows.Err())
 	}
 
 	return parcels, nil
@@ -89,58 +90,31 @@ func (s ParcelStore) SetStatus(number int, status string) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrorParcelNotFound
 		}
-		return fmt.Errorf("status update error: %v", err)
+		return fmt.Errorf("status update error: %w", err)
 	}
 	return nil
 }
 
-func (s ParcelStore) GetStatus(number int) (string, error) {
-	var status string
-	err := s.db.QueryRow("SELECT status FROM parcel WHERE number = ?", number).Scan(&status)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", ErrorParcelNotFound
-		}
-		return "", fmt.Errorf("GetStatus: scan status err: %v", err)
-	}
-
-	return status, nil
-}
-
 func (s ParcelStore) SetAddress(number int, address string) error {
-	status, err := s.GetStatus(number)
-	if err != nil {
-		return fmt.Errorf("SetAddress: %v", err)
-	}
-
-	if status != ParcelStatusRegistered {
-		return fmt.Errorf("SetAddress: parcel is not registered")
-	}
-
-	_, err = s.db.Exec(
-		"UPDATE parcel SET address = :address WHERE number = :id",
+	_, err := s.db.Exec(
+		"UPDATE parcel SET address = :address WHERE number = :id AND status = :status",
 		sql.Named("address", address),
+		sql.Named("status", ParcelStatusRegistered),
 		sql.Named("id", number))
 	if err != nil {
-		return fmt.Errorf("SetAddress: address update error: %v", err)
+		return fmt.Errorf("SetAddress: address update error: %w", err)
 	}
 
 	return nil
 }
 
 func (s ParcelStore) Delete(number int) error {
-	status, err := s.GetStatus(number)
+	_, err := s.db.Exec(
+		"DELETE FROM parcel WHERE number = :id AND status = :status",
+		sql.Named("id", number),
+		sql.Named("status", ParcelStatusRegistered))
 	if err != nil {
-		return fmt.Errorf("Delete: %v", err)
-	}
-
-	if status != ParcelStatusRegistered {
-		return fmt.Errorf("Delete: parcel is not registered")
-	}
-
-	_, err = s.db.Exec("DELETE FROM parcel WHERE number = ?", number)
-	if err != nil {
-		return fmt.Errorf("Delete: address update error: %v", err)
+		return fmt.Errorf("Delete: %w", err)
 	}
 	return nil
 }

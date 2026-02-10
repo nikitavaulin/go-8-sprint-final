@@ -40,20 +40,17 @@ func TestAddGetDelete(t *testing.T) {
 
 	// add
 	parcel.Number, err = store.Add(parcel)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, parcel.Number)
 
 	// get
 	parcelCopy, err := store.Get(parcel.Number)
-	assert.NoError(t, err)
-	assert.Equal(t, parcel.Number, parcelCopy.Number)
-	assert.Equal(t, parcel.Address, parcelCopy.Address)
-	assert.Equal(t, parcel.Client, parcelCopy.Client)
-	assert.Equal(t, parcel.CreatedAt, parcelCopy.CreatedAt)
+	require.NoError(t, err)
+	assert.Equal(t, parcel, parcelCopy)
 
 	// delete
 	err = store.Delete(parcelCopy.Number)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = store.Get(parcelCopy.Number)
 	assert.ErrorIs(t, err, ErrorParcelNotFound)
 }
@@ -71,7 +68,7 @@ func TestSetAddress(t *testing.T) {
 	// add
 	parcel.Number, err = store.Add(parcel)
 	require.NoError(t, err)
-	require.NotEmpty(t, parcel.Number)
+	assert.NotEmpty(t, parcel.Number)
 
 	// set address
 	newAddress := "new test address"
@@ -81,7 +78,7 @@ func TestSetAddress(t *testing.T) {
 	// check
 	parcelCopy, err := store.Get(parcel.Number)
 	require.NoError(t, err)
-	require.Equal(t, newAddress, parcelCopy.Address)
+	assert.Equal(t, newAddress, parcelCopy.Address)
 }
 
 // TestSetStatus проверяет обновление статуса
@@ -97,16 +94,16 @@ func TestSetStatus(t *testing.T) {
 	// add
 	parcel.Number, err = store.Add(parcel)
 	require.NoError(t, err)
-	require.NotEmpty(t, parcel.Number)
+	assert.NotEmpty(t, parcel.Number)
 
 	// set status
 	err = store.SetStatus(parcel.Number, ParcelStatusRegistered)
 	require.NoError(t, err)
 
 	// check
-	status, err := store.GetStatus(parcel.Number)
+	p, err := store.Get(parcel.Number)
 	require.NoError(t, err)
-	require.Equal(t, ParcelStatusRegistered, status)
+	assert.Equal(t, ParcelStatusRegistered, p.Status)
 }
 
 // TestGetByClient проверяет получение посылок по идентификатору клиента
@@ -146,17 +143,13 @@ func TestGetByClient(t *testing.T) {
 	// get by client
 	storedParcels, err := store.GetByClient(client)
 	require.NoError(t, err)
-	require.Len(t, storedParcels, len(parcels))
+	assert.Len(t, storedParcels, len(parcels))
 
 	// check
 	for _, parcel := range storedParcels {
 		// в parcelMap лежат добавленные посылки, ключ - идентификатор посылки, значение - сама посылка
 		parcelOriginal, ok := parcelMap[parcel.Number]
 		assert.True(t, ok)
-		assert.Equal(t, parcelOriginal.Number, parcel.Number)
-		assert.Equal(t, parcelOriginal.Address, parcel.Address)
-		assert.Equal(t, parcelOriginal.Client, parcel.Client)
-		assert.Equal(t, parcelOriginal.CreatedAt, parcel.CreatedAt)
-		assert.Equal(t, parcelOriginal.Status, parcel.Status)
+		assert.Equal(t, parcelOriginal, parcel)
 	}
 }
